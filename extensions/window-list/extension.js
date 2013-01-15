@@ -147,6 +147,7 @@ const WindowList = new Lang.Class({
     _init: function() {
         this.actor = new St.Widget({ name: 'panel',
                                      reactive: true,
+                                     track_hover: true,
                                      layout_manager: new Clutter.BinLayout()});
         this.actor.connect('destroy', Lang.bind(this, this._onDestroy));
 
@@ -239,12 +240,19 @@ const WindowList = new Lang.Class({
 
 let windowList;
 let injections = {};
+let notificationParent;
 
 function init() {
 }
 
 function enable() {
     windowList = new WindowList();
+
+    windowList.actor.connect('notify::hover', Lang.bind(Main.messageTray,
+        function() {
+            this._pointerInTray = windowList.actor.hover;
+            this._updateState();
+        }));
 
     injections['_trayDwellTimeout'] = MessageTray.MessageTray.prototype._trayDwellTimeout;
     MessageTray.MessageTray.prototype._trayDwellTimeout = function() {
@@ -253,8 +261,14 @@ function enable() {
 
     injections['_tween'] = MessageTray.MessageTray.prototype._tween;
     MessageTray.MessageTray.prototype._tween = function(actor, statevar, value, params) {
-        if (statevar == '_trayState' && !Main.overview.visible) {
-            let anchorY = windowList.actor.height;
+        if (!Main.overview.visible) {
+            let anchorY;
+            if (statevar == '_trayState')
+                anchorY = windowList.actor.height;
+            else if (statevar == '_notificationState')
+                anchorY = -windowList.actor.height;
+            else
+                anchorY = 0;
             actor.anchor_y = anchorY;
         }
         injections['_tween'].call(Main.messageTray, actor, statevar, value, params);
@@ -264,15 +278,30 @@ function enable() {
         this.actor.anchor_y = 0;
         injections['_onTrayHidden'].call(Main.messageTray);
     };
+
+    notificationParent = Main.messageTray._notificationWidget.get_parent();
+    Main.messageTray._notificationWidget.hide();
+    Main.messageTray._notificationWidget.reparent(windowList.actor);
+    Main.messageTray._notificationWidget.show();
 }
 
 function disable() {
     if (!windowList)
         return;
 
+    windowList.actor.hide();
+
+    if (notificationParent) {
+        Main.messageTray._notificationWidget.reparent(notificationParent);
+        notificationParent = null;
+    }
+
     windowList.actor.destroy();
     windowList = null;
 
     for (prop in injections)
         MessageTray.MessageTray.prototype[prop] = injections[prop];
+
+    Main.messageTray._notificationWidget.set_anchor_point(0, 0);
+    Main.messageTray.actor.set_anchor_point(0, 0);
 }
