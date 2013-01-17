@@ -146,6 +146,7 @@ const WindowList = new Lang.Class({
 
     _init: function() {
         this.actor = new St.Widget({ name: 'panel',
+                                     style_class: 'bottom-panel',
                                      reactive: true,
                                      track_hover: true,
                                      layout_manager: new Clutter.BinLayout()});

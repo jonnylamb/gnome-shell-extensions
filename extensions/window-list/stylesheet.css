@@ -1,3 +1,10 @@
+.bottom-panel {
+  /* .window-button-icon height +
+     .window-button vertical padding +
+     .window-button > StWidget vertical padding) */
+  height: 30px;
+}
+
 .window-list {
   spacing: 2px;
   font-size: 10pt;
@@ -20,7 +27,7 @@
   color: #bbb;
   background-color: black;
   border-radius: 4px;
-  padding: 2px 6px;
+  padding: 3px 6px 1px;
   box-shadow: inset 1px 1px 4px rgba(255,255,255,0.5);
   text-shadow: 1px 1px 4px rgba(0,0,0,0.8);
   spacing: 4px;
@@ -54,8 +61,8 @@
 }
 
 .window-button-icon {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
 }
 
 .tray-button {
