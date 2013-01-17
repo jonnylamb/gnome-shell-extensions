@@ -169,6 +169,15 @@ const WindowList = new Lang.Class({
                                        Lang.bind(this, this._updatePosition));
         this._updatePosition();
 
+        this._keyboardVisiblechangedId =
+            Main.layoutManager.connect('keyboard-visible-changed',
+                Lang.bind(this, function(o, state) {
+                    Main.layoutManager.keyboardBox.visible = state;
+                    Main.uiGroup.set_child_above_sibling(windowList.actor,
+                                                         Main.layoutManager.keyboardBox);
+                    this._updateKeyboardAnchor();
+                }));
+
         this._nWorkspacesChangedId =
             global.screen.connect('notify::n-workspaces',
                                   Lang.bind(this, this._onWorkspacesChanged));
@@ -177,11 +186,13 @@ const WindowList = new Lang.Class({
         this._overviewShowingId =
             Main.overview.connect('showing', Lang.bind(this, function() {
                 this.actor.hide();
+                this._updateKeyboardAnchor();
             }));
 
         this._overviewHidingId =
             Main.overview.connect('hiding', Lang.bind(this, function() {
                 this.actor.show();
+                this._updateKeyboardAnchor();
             }));
 
         let windows = Meta.get_window_actors(global.screen);
@@ -193,6 +204,14 @@ const WindowList = new Lang.Class({
         let monitor = Main.layoutManager.primaryMonitor;
         this.actor.width = monitor.width;
         this.actor.set_position(monitor.x, monitor.y + monitor.height - this.actor.height);
+    },
+
+    _updateKeyboardAnchor: function() {
+        if (!Main.keyboard.actor)
+            return;
+
+        let anchorY = Main.overview.visible ? 0 : this.actor.height;
+        Main.keyboard.actor.anchor_y = anchorY;
     },
 
     _onWindowAdded: function(ws, win) {
@@ -230,6 +249,12 @@ const WindowList = new Lang.Class({
     _onDestroy: function() {
         Main.layoutManager.disconnect(this._monitorsChangedId);
         this._monitorsChangedId = 0;
+
+        Main.layoutManager.disconnect(this._keyboardVisiblechangedId);
+        this._keyboardVisiblechangedId = 0;
+
+        if (Main.keyboard.actor)
+            Main.keyboard.actor.anchor_y = 0;
 
         global.screen.disconnect(this._nWorkspacesChangedId);
         this._nWorkspacesChangedId = 0;
