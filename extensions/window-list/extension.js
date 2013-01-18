@@ -92,10 +92,13 @@ const TrayButton = new Lang.Class({
     Name: 'TrayButton',
 
     _init: function() {
-        let icon = new St.Icon({ icon_name: 'dialog-information-symbolic',
-                                 style_class: 'system-status-icon' });
-        this.actor = new St.Button({ style_class: 'tray-button',
-                                     child: icon });
+        this._counterLabel = new St.Label({ x_align: Clutter.ActorAlign.CENTER,
+                                            x_expand: true,
+                                            y_align: Clutter.ActorAlign.CENTER,
+                                            y_expand: true });
+        this.actor = new St.Button({ style_class: 'summary-source-counter',
+                                     child: this._counterLabel,
+                                     layoutManager: new Clutter.BinLayout() });
         this.actor.set_x_align(Clutter.ActorAlign.END);
         this.actor.set_x_expand(true);
         this.actor.set_y_expand(true);
@@ -133,6 +136,7 @@ const TrayButton = new Lang.Class({
     },
 
     _updateVisibility: function() {
+        this._counterLabel.text = this._trayItemCount.toString();
         this.actor.visible = this._trayItemCount > 0;
     },
 
