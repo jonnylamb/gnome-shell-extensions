@@ -1,5 +1,6 @@
 const Clutter = imports.gi.Clutter;
 const Meta = imports.gi.Meta;
+const Shell = imports.gi.Shell;
 const St = imports.gi.St;
 
 const Lang = imports.lang;
@@ -215,6 +216,9 @@ const WindowList = new Lang.Class({
     },
 
     _onWindowAdded: function(ws, win) {
+        if (!Shell.WindowTracker.get_default().is_window_interesting(win))
+            return;
+
         let button = new WindowButton(win);
         this._windowList.add(button.actor, { y_fill: true });
     },
