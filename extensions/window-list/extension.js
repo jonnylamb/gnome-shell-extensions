@@ -26,6 +26,7 @@ const WindowButton = new Lang.Class({
 
         let box = new St.BoxLayout();
         this.actor = new St.Button({ style_class: 'window-button',
+                                     x_fill: true,
                                      child: box });
         this.actor._delegate = this;
 
@@ -185,10 +186,12 @@ const WindowList = new Lang.Class({
                                      layout_manager: new Clutter.BinLayout()});
         this.actor.connect('destroy', Lang.bind(this, this._onDestroy));
 
-        this._windowList = new St.BoxLayout({ style_class: 'window-list',
-                                              x_align: Clutter.ActorAlign.START,
-                                              x_expand: true,
-                                              y_expand: true });
+        let layout = new Clutter.BoxLayout({ homogeneous: true });
+        this._windowList = new St.Widget({ style_class: 'window-list',
+                                           layout_manager: layout,
+                                           x_align: Clutter.ActorAlign.START,
+                                           x_expand: true,
+                                           y_expand: true });
         this.actor.add_actor(this._windowList);
 
         this._trayButton = new TrayButton();
@@ -252,7 +255,10 @@ const WindowList = new Lang.Class({
             return;
 
         let button = new WindowButton(win);
-        this._windowList.add(button.actor, { y_fill: true });
+        this._windowList.layout_manager.pack(button.actor,
+                                             true, true, true,
+                                             Clutter.BoxAlignment.START,
+                                             Clutter.BoxAlignment.START);
     },
 
     _onWindowRemoved: function(ws, win) {
