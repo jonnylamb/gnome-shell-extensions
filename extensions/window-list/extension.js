@@ -186,16 +186,19 @@ const WindowList = new Lang.Class({
                                      layout_manager: new Clutter.BinLayout()});
         this.actor.connect('destroy', Lang.bind(this, this._onDestroy));
 
+        let box = new St.BoxLayout({ x_expand: true, y_expand: true });
+        this.actor.add_actor(box);
+
         let layout = new Clutter.BoxLayout({ homogeneous: true });
         this._windowList = new St.Widget({ style_class: 'window-list',
                                            layout_manager: layout,
                                            x_align: Clutter.ActorAlign.START,
                                            x_expand: true,
                                            y_expand: true });
-        this.actor.add_actor(this._windowList);
+        box.add(this._windowList, { expand: true });
 
         this._trayButton = new TrayButton();
-        this.actor.add_actor(this._trayButton.actor);
+        box.add(this._trayButton.actor);
 
         Main.layoutManager.addChrome(this.actor, { affectsStruts: true,
                                                    trackFullscreen: true });
