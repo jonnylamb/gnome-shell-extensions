@@ -29,11 +29,15 @@ const WindowButton = new Lang.Class({
                                      child: box });
         this.actor._delegate = this;
 
+        this.actor.connect('allocation-changed',
+                           Lang.bind(this, this._updateIconGeometry));
+
         let textureCache = St.TextureCache.get_default();
         let icon = textureCache.bind_pixbuf_property(this.metaWindow, "icon");
-        box.add(new St.Bin({ style_class: 'window-button-icon', child: icon }));
-
-        this._label = new St.Label({ text: metaWindow.title });
+        this._icon = new St.Bin({ style_class: 'window-button-icon',
+                                  child: icon });
+        box.add(this._icon);
+        this._label = new St.Label();
         box.add(this._label);
 
         this.actor.connect('clicked', Lang.bind(this, this._onClicked));
@@ -46,20 +50,31 @@ const WindowButton = new Lang.Class({
 
         this._notifyTitleId =
             this.metaWindow.connect('notify::title',
-                                    Lang.bind(this, function() {
-                                        this._label.text = this.metaWindow.title;
-                                    }));
+                                    Lang.bind(this, this._updateTitle));
         this._notifyMinimizedId =
             this.metaWindow.connect('notify::minimized',
-                                    Lang.bind(this, this._updateStyle));
+                                    Lang.bind(this, this._minimizedChanged));
         this._notifyFocusId =
             global.display.connect('notify::focus-window',
                                    Lang.bind(this, this._updateStyle));
-        this._updateStyle();
+        this._minimizedChanged();
     },
 
     _onClicked: function() {
         _minimizeOrActivateWindow(this.metaWindow);
+    },
+
+    _minimizedChanged: function() {
+        this._icon.opacity = this.metaWindow.minimized ? 128 : 255;
+        this._updateTitle();
+        this._updateStyle();
+    },
+
+    _updateTitle: function() {
+        if (this.metaWindow.minimized)
+            this._label.text = '[%s]'.format(this.metaWindow.title);
+        else
+            this._label.text = this.metaWindow.title;
     },
 
     _updateStyle: function() {
@@ -77,6 +92,19 @@ const WindowButton = new Lang.Class({
     _updateVisibility: function() {
         let workspace = global.screen.get_active_workspace();
         this.actor.visible = this.metaWindow.located_on_workspace(workspace);
+    },
+
+    _updateIconGeometry: function() {
+        let [x, y] = this.actor.get_transformed_position();
+        let [w, h] = this.actor.get_transformed_size();
+
+        let rect = new Meta.Rectangle();
+        rect.x = x + Math.floor(w / 2);
+        rect.y = y + Math.floor(h / 2);
+        rect.width = w;
+        rect.height = h;
+
+        this.metaWindow.set_icon_geometry(rect);
     },
 
     _onDestroy: function() {
@@ -269,6 +297,10 @@ const WindowList = new Lang.Class({
 
         Main.overview.disconnect(this._overviewShowingId);
         Main.overview.disconnect(this._overviewHidingId);
+
+        let windows = Meta.get_window_actors(global.screen);
+        for (let i = 0; i < windows.length; i++)
+            windows[i].metaWindow.set_icon_geometry(null);
     }
 });
 
