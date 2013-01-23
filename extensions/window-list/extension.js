@@ -19,6 +19,15 @@ const GroupingMode = {
 };
 
 
+// compat with 3.7.4
+if (!Meta.Window.prototype.located_on_workspace)
+    Meta.Window.prototype.located_on_workspace = function(ws) {
+        return this.is_on_all_workspaces() || this.get_workspace() == ws;
+    };
+
+if (!Meta.Window.prototype.set_icon_geometry)
+    Meta.Window.prototype.set_icon_geometry = function() {}
+
 function _minimizeOrActivateWindow(window) {
         let focusWindow = global.display.focus_window;
         if (focusWindow == window ||
