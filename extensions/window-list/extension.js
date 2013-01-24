@@ -6,6 +6,17 @@ const St = imports.gi.St;
 const Lang = imports.lang;
 const Main = imports.ui.main;
 const MessageTray = imports.ui.messageTray;
+const PopupMenu = imports.ui.popupMenu;
+
+const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
+const Convenience = Me.imports.convenience;
+
+const GroupingMode = {
+    NEVER: 0,
+    AUTO: 1, /* TODO: implement */
+    ALWAYS: 2
+};
 
 
 function _minimizeOrActivateWindow(window) {
@@ -132,6 +143,151 @@ const WindowButton = new Lang.Class({
 });
 
 
+const AppButton = new Lang.Class({
+    Name: 'AppButton',
+
+    _init: function(app) {
+        this.app = app;
+
+        let stack = new St.Widget({ layout_manager: new Clutter.BinLayout() });
+        this.actor = new St.Button({ style_class: 'window-button',
+                                     x_fill: true,
+                                     child: stack });
+        this.actor._delegate = this;
+
+        this.actor.connect('allocation-changed',
+                           Lang.bind(this, this._updateIconGeometry));
+
+        this._singleWindowTitle = new St.Bin({ x_expand: true,
+                                               x_align: St.Align.START });
+        stack.add_actor(this._singleWindowTitle);
+
+        this._multiWindowTitle = new St.BoxLayout({ x_expand: true });
+        stack.add_actor(this._multiWindowTitle);
+
+        let icon = new St.Bin({ style_class: 'window-button-icon',
+                                child: app.create_icon_texture(24) });
+        this._multiWindowTitle.add(icon);
+        this._multiWindowTitle.add(new St.Label({ text: app.get_name() }));
+
+        this._menuManager = new PopupMenu.PopupMenuManager(this);
+        this._menu = new PopupMenu.PopupMenu(this.actor, 0.5, St.Side.BOTTOM);
+        this._menu.actor.hide();
+        this._menu.connect('activate', Lang.bind(this, this._onMenuActivate));
+        this._menuManager.addMenu(this._menu);
+        Main.uiGroup.add_actor(this._menu.actor);
+
+        this.actor.connect('clicked', Lang.bind(this, this._onClicked));
+        this.actor.connect('destroy', Lang.bind(this, this._onDestroy));
+
+        this._switchWorkspaceId =
+            global.window_manager.connect('switch-workspace',
+                                          Lang.bind(this, this._updateVisibility));
+        this._updateVisibility();
+
+        this._windowsChangedId =
+            this.app.connect('windows-changed',
+                             Lang.bind(this, this._windowsChanged));
+        this._windowsChanged();
+
+        this._windowTracker = Shell.WindowTracker.get_default();
+        this._notifyFocusId =
+            this._windowTracker.connect('notify::focus-app',
+                                        Lang.bind(this, this._updateStyle));
+        this._updateStyle();
+    },
+
+    _updateVisibility: function() {
+        let workspace = global.screen.get_active_workspace();
+        this.actor.visible = this.app.is_on_workspace(workspace);
+    },
+
+    _updateStyle: function() {
+        if (this._windowTracker.focus_app == this.app)
+            this.actor.add_style_class_name('focused');
+        else
+            this.actor.remove_style_class_name('focused');
+    },
+
+    _updateIconGeometry: function() {
+        let windows = this.app.get_windows();
+
+        let [x, y] = this.actor.get_transformed_position();
+        let [w, h] = this.actor.get_transformed_size();
+
+        let rect = new Meta.Rectangle();
+        rect.x = x + Math.floor(w / 2);
+        rect.y = y + Math.floor(h / 2);
+        rect.width = w;
+        rect.height = h;
+
+        windows.forEach(function(w) {
+            w.set_icon_geometry(rect);
+        });
+    },
+
+
+    _getWindowList: function() {
+        let workspace = global.screen.get_active_workspace();
+        return this.app.get_windows().filter(function(win) {
+            return win.located_on_workspace(workspace);
+        });
+    },
+
+    _windowsChanged: function() {
+        let windows = this._getWindowList();
+        this._singleWindowTitle.visible = windows.length == 1;
+        this._multiWindowTitle.visible = !this._singleWindowTitle.visible;
+
+        if (this._singleWindowTitle.visible) {
+            if (!this._windowTitle) {
+                this._windowTitle = new WindowTitle(windows[0]);
+                this._singleWindowTitle.child = this._windowTitle.actor;
+            }
+        } else {
+            if (this._windowTitle) {
+                this._singleWindowTitle.child = null;
+                this._windowTitle = null;
+            }
+        }
+    },
+
+    _onClicked: function() {
+        if (this._menu.isOpen) {
+            this._menu.close();
+            return;
+        }
+
+        let windows = this._getWindowList();
+        if (windows.length == 1) {
+            _minimizeOrActivateWindow(windows[0]);
+        } else {
+            this._menu.removeAll();
+
+            for (let i = 0; i < windows.length; i++) {
+                let windowTitle = new WindowTitle(windows[i]);
+                let item = new PopupMenu.PopupBaseMenuItem();
+                item.addActor(windowTitle.actor);
+                item._window = windows[i];
+                this._menu.addMenuItem(item);
+            }
+            this._menu.open();
+        }
+    },
+
+    _onMenuActivate: function(menu, child) {
+        child._window.activate(global.get_current_time());
+    },
+
+    _onDestroy: function() {
+        global.window_manager.disconnect(this._switchWorkspaceId);
+        this._windowTracker.disconnect(this._notifyFocusId);
+        this.app.disconnect(this._windowsChangedId);
+        this._menu.actor.destroy();
+    }
+});
+
+
 const TrayButton = new Lang.Class({
     Name: 'TrayButton',
 
@@ -218,6 +374,11 @@ const WindowList = new Lang.Class({
         Main.layoutManager.addChrome(this.actor, { affectsStruts: true,
                                                    trackFullscreen: true });
 
+        this._appSystem = Shell.AppSystem.get_default();
+        this._appStateChangedId =
+            this._appSystem.connect('app-state-changed',
+                                    Lang.bind(this, this._onAppStateChanged));
+
         this._monitorsChangedId =
             Main.layoutManager.connect('monitors-changed',
                                        Lang.bind(this, this._updatePosition));
@@ -249,9 +410,29 @@ const WindowList = new Lang.Class({
                 this._updateKeyboardAnchor();
             }));
 
-        let windows = Meta.get_window_actors(global.screen);
-        for (let i = 0; i < windows.length; i++)
-            this._onWindowAdded(null, windows[i].metaWindow);
+        this._settings = Convenience.getSettings();
+        this._settings.connect('changed::grouping-mode',
+                               Lang.bind(this, this._groupingModeChanged));
+        this._groupingModeChanged();
+    },
+
+    _groupingModeChanged: function() {
+        this._groupingMode = this._settings.get_enum('grouping-mode');
+        this._populateWindowList();
+    },
+
+    _populateWindowList: function() {
+        this._windowList.destroy_all_children();
+
+        if (this._groupingMode == GroupingMode.NEVER) {
+            let windows = Meta.get_window_actors(global.screen);
+            for (let i = 0; i < windows.length; i++)
+                this._onWindowAdded(null, windows[i].metaWindow);
+        } else {
+            let apps = this._appSystem.get_running();
+            for (let i = 0; i < apps.length; i++)
+                this._addApp(apps[i]);
+        }
     },
 
     _updatePosition: function() {
@@ -268,8 +449,39 @@ const WindowList = new Lang.Class({
         Main.keyboard.actor.anchor_y = anchorY;
     },
 
+    _onAppStateChanged: function(appSys, app) {
+        if (this._groupingMode != GroupingMode.ALWAYS)
+            return;
+
+        if (app.state == Shell.AppState.RUNNING)
+            this._addApp(app);
+        else if (app.state == Shell.AppState.STOPPED)
+            this._removeApp(app);
+    },
+
+    _addApp: function(app) {
+        let button = new AppButton(app);
+        this._windowList.layout_manager.pack(button.actor,
+                                             true, true, true,
+                                             Clutter.BoxAlignment.START,
+                                             Clutter.BoxAlignment.START);
+    },
+
+    _removeApp: function(app) {
+        let children = this._windowList.get_children();
+        for (let i = 0; i < children.length; i++) {
+            if (children[i]._delegate.app == app) {
+                children[i].destroy();
+                return;
+            }
+        }
+    },
+
     _onWindowAdded: function(ws, win) {
         if (!Shell.WindowTracker.get_default().is_window_interesting(win))
+            return;
+
+        if (this._groupingMode != GroupingMode.NEVER)
             return;
 
         let button = new WindowButton(win);
@@ -280,6 +492,9 @@ const WindowList = new Lang.Class({
     },
 
     _onWindowRemoved: function(ws, win) {
+        if (this._groupingMode != GroupingMode.NEVER)
+            return;
+
         let children = this._windowList.get_children();
         for (let i = 0; i < children.length; i++) {
             if (children[i]._delegate.metaWindow == win) {
@@ -307,6 +522,9 @@ const WindowList = new Lang.Class({
     },
 
     _onDestroy: function() {
+        this._appSystem.disconnect(this._appStateChangedId);
+        this._appStateChangedId = 0;
+
         Main.layoutManager.disconnect(this._monitorsChangedId);
         this._monitorsChangedId = 0;
 
