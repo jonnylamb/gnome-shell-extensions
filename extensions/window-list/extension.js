@@ -374,6 +374,10 @@ function disable() {
     windowList.actor.destroy();
     windowList = null;
 
+    // horrible workaround for theme node caching causing
+    // crashes on extension stylesheet reloading
+    Main.loadTheme();
+
     for (prop in injections)
         MessageTray.MessageTray.prototype[prop] = injections[prop];
 
