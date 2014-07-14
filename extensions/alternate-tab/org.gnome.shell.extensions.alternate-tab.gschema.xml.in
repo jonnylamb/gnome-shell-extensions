@@ -1,0 +1,13 @@
+<schemalist gettext-domain="gnome-shell-extensions">
+  <schema id="org.gnome.shell.extensions.alternate-tab" path="/org/gnome/shell/extensions/alternate-tab/">
+    <key type="b" name="current-monitor-only">
+      <default>false</default>
+      <summary>Limit switcher to current monitor.</summary>
+      <description>
+                If true, only windows from the current monitor are
+                shown in the switcher.
+                Otherwise, all windows are included.
+      </description>
+    </key>
+  </schema>
+</schemalist>

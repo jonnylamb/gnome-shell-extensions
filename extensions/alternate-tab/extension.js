@@ -8,6 +8,10 @@ const Shell = imports.gi.Shell;
 const AltTab = imports.ui.altTab;
 const Main = imports.ui.main;
 
+const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
+const Convenience = Me.imports.convenience;
+
 let injections = {};
 
 function init(metadata) {
@@ -18,6 +22,8 @@ function setKeybinding(name, func) {
 }
 
 function enable() {
+    let settings = Convenience.getSettings();
+
     injections['_initialSelection'] = AltTab.WindowSwitcherPopup.prototype._initialSelection;
     AltTab.WindowSwitcherPopup.prototype._initialSelection = function(backward, binding) {
         if (binding == 'switch-windows-backward' ||
@@ -46,6 +52,17 @@ function enable() {
                 this._select(this._next());
         }
     };
+    injections['_getWindowList'] = AltTab.WindowSwitcherPopup.prototype._getWindowList;
+    AltTab.WindowSwitcherPopup.prototype._getWindowList = function() {
+        let wins = Lang.bind(this, injections['_getWindowList'])();
+        if (settings.get_boolean('current-monitor-only')) {
+            wins = wins.filter(function(win) {
+                return global.screen.get_current_monitor() == win.get_monitor();
+            });
+        }
+        return wins;
+    };
+
 
     setKeybinding('switch-applications', Lang.bind(Main.wm, Main.wm._startWindowSwitcher));
     setKeybinding('switch-group', Lang.bind(Main.wm, Main.wm._startWindowSwitcher));
