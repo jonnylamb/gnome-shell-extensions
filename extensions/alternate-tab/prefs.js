@@ -16,6 +16,8 @@ const Convenience = Me.imports.convenience;
 const SETTINGS_APP_ICON_MODE = 'app-icon-mode';
 const SETTINGS_CURRENT_WORKSPACE_ONLY = 'current-workspace-only';
 
+const EXTENSION_SETTINGS_CURRENT_MONITOR_ONLY = 'current-monitor-only';
+
 const MODES = {
     'thumbnail-only': N_("Thumbnail only"),
     'app-icon-only': N_("Application icon only"),
@@ -70,6 +72,14 @@ const AltTabSettingsWidget = new GObject.Class({
 	                                  margin_top: 6 });
 	this._settings.bind(SETTINGS_CURRENT_WORKSPACE_ONLY, check, 'active', Gio.SettingsBindFlags.DEFAULT);
 	this.add(check);
+
+        this._extensionSettings = Convenience.getSettings();
+
+        let monitorCheck = new Gtk.CheckButton({ label: _("Show only windows on the current monitor"),
+                                        margin_top: 12 });
+        this._extensionSettings.bind(EXTENSION_SETTINGS_CURRENT_MONITOR_ONLY, monitorCheck, 'active', Gio.SettingsBindFlags.DEFAULT);
+        this.add(monitorCheck);
+
     },
 });
 
